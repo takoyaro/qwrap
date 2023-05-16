@@ -1,0 +1,27 @@
+{
+  "name": "qwrap",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Qdrant wrapper",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "keywords": [
+    "qdrant",
+    "wrapper"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx ./src/index.ts"
+  },
+  "author": "takoyaro",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/uuid": "^9.0.1",
+    "bun-types": "^0.5.0"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.1.6",
+    "@xenova/transformers": "^2.0.0-alpha.2",
+    "uuid": "^9.0.0"
+  }
+}
