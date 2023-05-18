@@ -5,8 +5,8 @@ dependencies:
     specifier: ^1.1.6
     version: 1.1.6(typescript@5.0.4)
   '@xenova/transformers':
-    specifier: ^2.0.0-alpha.2
-    version: 2.0.0-alpha.2
+    specifier: 2.0.0
+    version: 2.0.0
   uuid:
     specifier: ^9.0.0
     version: 9.0.0
@@ -96,8 +96,8 @@ packages:
     resolution: {integrity: sha512-rFT3ak0/2trgvp4yYZo5iKFEPsET7vKydKF+VRCxlQ9bpheehyAJH89dAkaLEq/j/RZXJIqcgsmPJKUP1Z28HA==}
     dev: true
 
-  /@xenova/transformers@2.0.0-alpha.2:
-    resolution: {integrity: sha512-iD4Qlo/K88vei30HGZjqPf2w2pOQW+OL5PvwV9Bo2b0gdbeKnnUXK6Oc9sZm2upyyBX/Gg2kbjWe773rqylDTA==}
+  /@xenova/transformers@2.0.0:
+    resolution: {integrity: sha512-dTLzljbmPa9ewy43OpLzm8KQPAzj0ssEg55e9NKuTLmG7AolaT49gXiOc1IISc6aze4DNv+rUdYwMLPBQMN2SA==}
     dependencies:
       onnxruntime-web: 1.14.0
       sharp: 0.32.1
