@@ -24,14 +24,24 @@ class Qwrap{
     private client: QdrantClient;
     private pipe: Pipeline;
 
-    constructor(params:QdrantClientParams){
+    constructor(params?:QdrantClientParams){
+        params = params || {host:'localhost',port:6333};
         this.client = new QdrantClient(params);
         this.pipe = pipeline('feature-extraction') as unknown as Pipeline;
     }
 
     public async createCollection(collection_name:string, options?:ICollectionCreateOptions){
-        options = options || {};
-        return await this.client.createCollection(collection_name,options as any);
+        let opts = options || {timeout: 1000, vectors: {size:384,distance:'Cosine'}}
+        if(!('vectors' in opts)){
+            opts = {
+                ...opts,
+                vectors:{
+                    size:384,
+                    distance:'Cosine'
+                }
+            }
+        }
+        return await this.client.createCollection(collection_name,opts as any);
     }
 
     public async deleteCollection(collection_name:string,args?:{timeout?:number}){
@@ -64,9 +74,6 @@ class Qwrap{
         if(this.pipe instanceof Promise){
             this.pipe = await this.pipe;
         }
-        else{
-            console.log('pipe is not a promise',this.pipe);
-        }
         let vectors = data.map((item)=>this.pipe(item.data));
         vectors = await Promise.all(vectors);
         const payloads = data.map((item)=>{
@@ -96,7 +103,7 @@ class Qwrap{
 
     public async search(collection_name:string,query:string, opts?:ICollectionSearchOptions){
         if(this.pipe instanceof Promise){
-            await this.pipe;
+            this.pipe = await this.pipe;
         }
         const vector = await this.pipe(query);
         const options:Omit<ICollectionSearchOptions,'filter'> & Record<string,any> & {filter?:Record<string,any>} = {
