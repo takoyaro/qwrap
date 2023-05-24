@@ -1,6 +1,6 @@
 {
   "name": "qwrap",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Qdrant wrapper",
   "main": "./dist/index.js",
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.1.6",
-    "@xenova/transformers": "2.0.0",
+    "@xenova/transformers": "2.0.1",
     "uuid": "^9.0.0"
   }
 }
