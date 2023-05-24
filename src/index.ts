@@ -5,15 +5,24 @@ import {v4 as uuidV4} from 'uuid';
 interface ICollectionCreateOptions{
     timeout?:number|undefined, 
     init_from?:string, 
-    on_disk_payload?:boolean
+    on_disk_payload?:boolean,
+    fields?:string[]
 }
 
 interface ICollectionSearchOptions{
     filter?:TMongoStyleFilter[],
     limit?:number,
     offset?:number,
-    score_threshold?:number
+    score_threshold?:number,
+    fields?:string[]
 }
+
+type TVectorDef = { size:number, distance:string };
+type TMultipleVectorsDef = Record<string,TVectorDef>;
+type TInsertParams<T> = {payload?:Record<string,any>} & T;
+
+type SingleVector = {data:string}
+type MultipleVectors = {fields:Record<string,string>}
 
 type TAnd = {$and:Record<string,any>[]};
 type ToOr = {$or:Record<string,any>[]};
@@ -31,7 +40,7 @@ class Qwrap{
     }
 
     public async createCollection(collection_name:string, options?:ICollectionCreateOptions){
-        let opts = options || {timeout: 1000, vectors: {size:384,distance:'Cosine'}}
+        let opts:ICollectionCreateOptions | ICollectionCreateOptions & {vectors:TVectorDef|TMultipleVectorsDef} = options || {timeout: 1000, vectors: {size:384,distance:'Cosine'}}
         if(!('vectors' in opts)){
             opts = {
                 ...opts,
@@ -40,6 +49,16 @@ class Qwrap{
                     distance:'Cosine'
                 }
             }
+        }
+        if(opts.fields){
+            let vecs:Record<string,{size:number,distance:string}> = {};
+            for (const field of opts.fields) {
+                vecs[field] = {
+                    size:384,
+                    distance:'Cosine'
+                }
+            }
+            opts.vectors = vecs;
         }
         return await this.client.createCollection(collection_name,opts as any);
     }
@@ -56,15 +75,16 @@ class Qwrap{
         return await this.client.getCollections();
     }
 
-    public async insert(collection_name:string, data:{data:string,payload?:Record<string,any>}[], args?:{timeout?:number}){
+    public async insert(collection_name:string, opts:TInsertParams<SingleVector|MultipleVectors>, args?:{timeout?:number}){
         const collection_list = (await this.client.getCollections()).collections.map((item)=>item.name);
         if(!collection_list.includes(collection_name)){
             await this.client.createCollection(collection_name,{
                 timeout: 1000,
-                vectors: {
-                    size:384,
-                    distance:'Cosine'
-                }
+                //@ts-ignore
+                vectors: ('fields' in opts) ? {fields:(Object.entries(opts.fields)).reduce((acc,curr)=>{
+                    acc[curr[0]] = {size:384,distance:'Cosine'};
+                    return acc;
+                },{} as Record<string,{size:number,distance:"Cosine" | "Euclid" | "Dot"}>)} : {size:384,distance:'Cosine'}
             });
         }
         const collection = await this.client.getCollection(collection_name);
@@ -74,17 +94,44 @@ class Qwrap{
         if(this.pipe instanceof Promise){
             this.pipe = await this.pipe;
         }
-        let vectors = data.map((item)=>this.pipe(item.data));
-        vectors = await Promise.all(vectors);
-        const payloads = data.map((item)=>{
-            return {_qData:item.data,...item.payload} || {}
-        });
-        return await this.client.upsert(collection_name,{
-            batch: {
-                vectors:vectors.map(v=>Array.from(v.data as Float32Array)), 
-                ids: data.map((item)=>item.payload?.id || uuidV4()),
-                payloads
+        
+        if('data' in opts){
+            const vector = await this.pipe(opts.data);
+            const payload = opts.payload || {};
+            return await this.client.upsert(collection_name,{
+                batch: {
+                    vectors:[Array.from(vector.data as Float32Array)],
+                    ids:[payload.id || uuidV4()],
+                    payloads:[{_qData:opts.data,...payload}]
+                }
+            });
+        }
+
+        const data = await Promise.all(Object.entries(opts.fields).map(async ([k,v])=>{
+            return {
+                field:k,
+                data:v
             }
+        }));
+        const payload = opts.payload || {};
+        const qData:Record<string,string> = {};
+        const vectors_with_keys:Record<string,number[]> = {};
+        for (const field of data) {
+            qData[field.field] = field.data;
+            const vector = await this.pipe(field.data);
+            vectors_with_keys[field.field] = Array.from(vector.data as Float32Array)
+        }
+
+        console.log("VECTORS WITH KEYS",vectors_with_keys);
+        //vectors property needs to be an object with field names as keys
+        return await this.client.upsert(collection_name,{
+            'points':[
+                {
+                    'id':uuidV4(),
+                    'payload':{_qData:opts.fields,...payload},
+                    'vector':vectors_with_keys
+                }
+            ]
         });
     }
 
@@ -112,6 +159,14 @@ class Qwrap{
             with_payload:true,
         }
         if(opts){
+            if(opts.fields){
+                options.vector = opts.fields?.map((field)=>{
+                    return {
+                        name:field,
+                        vector:Array.from(vector.data)
+                    }
+                });
+            }
             if(opts.filter){
                 options['filter'] = this.MongoFiltersToQdrantFilters(opts.filter);
             }
@@ -125,7 +180,27 @@ class Qwrap{
                 options['score_threshold'] = opts.score_threshold;
             }
         }
+        if(opts?.fields){
+            if([0,1].includes(opts.fields.length)){
+                return await this.client.search(collection_name,options as any);
+            }
+            else if(opts.fields.length > 1){
+                const results = await this.client.searchBatch(collection_name,{
+                    'searches':opts.fields.map((field,i)=>{
+                        return {
+                            vector:options.vector[i],
+                            with_vector:false,
+                            with_payload:true,
+                            limit:1,
+                            score_threshold:0.0
+                        }
+                    })                    
+                })
+                return results.flatMap(r=>r);
+            }
+        }
         return await this.client.search(collection_name,options as any);
+        
     }
 
     private MongoFiltersToQdrantFilters(filters:TMongoStyleFilter[]){
